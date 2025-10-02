@@ -1,119 +1,129 @@
+use crate::{
+    protocol::{
+        WlObjectId,
+        message::{WlMessage, WlMessageIter},
+        registry::event::handle_wl_registry_event,
+        types::{WlNewId, WlString},
+    },
+    wl_request_opcode, wl_request_param,
+};
+
+use super::event::handle_wl_display_event;
+
+use std::{
+    convert::TryInto,
+    io::{Read, Write},
+    os::unix::net::UnixStream,
+};
+
 use anyhow::anyhow;
 
-/// Represents the request types that can be sent to the Wayland display object.
+wl_request_opcode! {
+    /// Represents the request types that can be sent to the Wayland display object.
+    ///
+    /// The display object supports core protocol management requests that enable
+    /// clients to synchronize with the server and discover available interfaces.
+    Opcode {
+        /// Creates a synchronization point with the compositor.
+        /// Returns a callback object that fires when all previous requests have been processed.
+        Sync = 0,
+
+        /// Retrieves the global registry object for interface discovery.
+        /// This is typically the first request clients make after connecting.
+        GetRegistry = 1,
+    }
+}
+
+wl_request_param! {
+    TestParam {
+        string: WlString,
+    }
+}
+
+wl_request_param! {
+    /// Parameters for the `wl_display.sync` request.
+    ///
+    /// This request creates a synchronization barrier between client and server.
+    /// The compositor will emit a 'done' event on the returned callback object
+    /// when all previous requests have been processed, ensuring ordered execution.
+    ///
+    /// # Specification Reference
+    /// ```xml
+    /// <request name="sync">
+    ///   <description summary="asynchronous roundtrip">
+    ///     The sync request asks the server to emit the 'done' event
+    ///     on the returned wl_callback object. Since requests are
+    ///     handled in-order and events are delivered in-order, this can
+    ///     be used as a barrier to ensure all previous requests and the
+    ///     resulting events have been handled.
+    ///   </description>
+    ///   <arg name="callback" type="new_id" interface="wl_callback"
+    ///        summary="callback object for the sync request"/>
+    /// </request>
+    /// ```
+    SyncParam {
+        /// The object ID to assign to the newly created wl_callback object.
+        /// The compositor will destroy this object after firing the callback.
+        new_id: WlNewId,
+    }
+}
+
+wl_request_param! {
+    /// Parameters for the `wl_display.get_registry` request.
+    ///
+    /// This request creates a registry object that allows the client to discover
+    /// and bind to global objects available from the compositor. It is the
+    /// fundamental mechanism for interface discovery in the Wayland protocol.
+    ///
+    /// # Specification Reference
+    /// ```xml
+    /// <request name="get_registry">
+    ///   <description summary="get global registry object">
+    ///     This request creates a registry object that allows the client
+    ///     to list and bind the global objects available from the
+    ///     compositor.
+    ///   </description>
+    ///   <arg name="registry" type="new_id" interface="wl_registry"
+    ///        summary="global registry object"/>
+    /// </request>
+    /// ```
+    RequestParam {
+        /// The object ID to assign to the newly created wl_registry object.
+        /// This registry will receive global advertisement events from the compositor.
+        new_id: WlNewId,
+    }
+}
+
+/// Sends a `wl_display.get_registry` request to the compositor and processes the response.
 ///
-/// The display object supports core protocol management requests that enable
-/// clients to synchronize with the server and discover available interfaces.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WlDisplayRequest {
-    /// Creates a synchronization point with the compositor.
-    /// Returns a callback object that fires when all previous requests have been processed.
-    Sync = 0,
-
-    /// Retrieves the global registry object for interface discovery.
-    /// This is typically the first request clients make after connecting.
-    GetRegistry = 1,
-}
-
-impl From<WlDisplayRequest> for u16 {
-    /// Converts a `WlDisplayRequest` variant to its corresponding protocol opcode.
-    ///
-    /// # Returns
-    /// The numeric opcode value used in Wayland protocol messages for this request type.
-    fn from(request: WlDisplayRequest) -> u16 {
-        request as u16
-    }
-}
-
-/// Parameters for the `wl_display.sync` request.
+/// This function implements the core bootstrap sequence for Wayland clients. It requests
+/// the global registry object from the display, which provides access to all available
+/// global interfaces offered by the compositor.
 ///
-/// This request creates a synchronization barrier between client and server.
-/// The compositor will emit a 'done' event on the returned callback object
-/// when all previous requests have been processed, ensuring ordered execution.
+/// # Arguments
+/// * `stream` - The Unix socket stream connected to the Wayland compositor
+/// * `new_id` - The object ID to assign to the newly created registry object
 ///
-/// # Specification Reference
-/// ```xml
-/// <request name="sync">
-///   <description summary="asynchronous roundtrip">
-///     The sync request asks the server to emit the 'done' event
-///     on the returned wl_callback object. Since requests are
-///     handled in-order and events are delivered in-order, this can
-///     be used as a barrier to ensure all previous requests and the
-///     resulting events have been handled.
-///   </description>
-///   <arg name="callback" type="new_id" interface="wl_callback"
-///        summary="callback object for the sync request"/>
-/// </request>
-/// ```
-pub struct WlDisplaySyncParam {
-    /// The object ID to assign to the newly created wl_callback object.
-    /// The compositor will destroy this object after firing the callback.
-    new_id: u32,
-}
-
-#[allow(unused)]
-impl WlDisplaySyncParam {
-    /// Creates new synchronization parameters with the specified callback object ID.
-    ///
-    /// # Arguments
-    /// * `new_id` - The object ID for the new wl_callback object
-    pub(super) fn new(new_id: u32) -> Self {
-        Self { new_id }
-    }
-
-    /// Returns the object ID assigned to the synchronization callback.
-    pub(super) fn new_id(&self) -> u32 {
-        self.new_id
-    }
-}
-
-impl From<WlDisplaySyncParam> for Vec<u8> {
-    /// Serializes the synchronization parameters into the Wayland wire format.
-    ///
-    /// # Returns
-    /// A 4-byte vector containing the new_id in native endianness.
-    ///
-    /// # Wire Format
-    /// The sync request carries a single argument:
-    /// - Bytes 0-3: `new_id` (u32) - The ID for the new callback object
-    fn from(args: WlDisplaySyncParam) -> Vec<u8> {
-        args.new_id.to_ne_bytes().to_vec()
-    }
-}
-
-impl TryFrom<&[u8]> for WlDisplaySyncParam {
-    type Error = anyhow::Error;
-
-    /// Deserializes synchronization parameters from the Wayland wire format.
-    ///
-    /// # Arguments
-    /// * `buf` - The byte buffer containing serialized parameter data
-    ///
-    /// # Returns
-    /// * `Ok(WlDisplaySyncParam)` if the buffer contains valid parameter data
-    /// * `Err(anyhow::Error)` if the buffer is malformed or incomplete
-    ///
-    /// # Buffer Requirements
-    /// The buffer must contain exactly 4 bytes representing the new_id value.
-    fn try_from(buf: &[u8]) -> anyhow::Result<WlDisplaySyncParam> {
-        if buf.len() != 4 {
-            return Err(anyhow!(
-                "Invalid buffer length for WlDisplaySyncParam: expected 4 bytes, got {}",
-                buf.len()
-            ));
-        }
-
-        Ok(WlDisplaySyncParam {
-            new_id: u32::from_ne_bytes(buf.try_into()?),
-        })
-    }
-}
-
-/// Parameters for the `wl_display.get_registry` request.
+/// # Returns
+/// * `Ok(())` if the request was successfully sent and all response events processed
+/// * `Err(anyhow::Error)` if any I/O operation fails or protocol errors occur
 ///
-/// This request creates a registry object that allows the client to discover
-/// and bind to global objects available from the compositor. It is the
-/// fundamental mechanism for interface discovery in the Wayland protocol.
+/// # Protocol Sequence
+/// 1. Serializes the `get_registry` request with the specified new object ID
+/// 2. Sends the request message to the compositor via the Unix socket
+/// 3. Reads the compositor's response (typically a burst of global advertisement events)
+/// 4. Processes all incoming events, routing them to appropriate handlers
+///
+/// # Expected Response Events
+/// After a successful `get_registry` request, the compositor will typically send:
+/// - A `wl_registry.global` event for each currently available global object
+/// - Potentially other protocol management events on the display object
+/// - The initial event burst concludes when all current globals have been advertised
+///
+/// # Resource Management
+/// According to the Wayland specification, the server-side resources consumed by
+/// `get_registry` can only be released when the client disconnects. Clients should
+/// invoke this request infrequently to avoid wasting server memory.
 ///
 /// # Specification Reference
 /// ```xml
@@ -127,66 +137,68 @@ impl TryFrom<&[u8]> for WlDisplaySyncParam {
 ///        summary="global registry object"/>
 /// </request>
 /// ```
-pub struct WlDisplayGetRegisterParam {
-    /// The object ID to assign to the newly created wl_registry object.
-    /// This registry will receive global advertisement events from the compositor.
-    new_id: u32,
-}
+pub fn get_registry(stream: &mut UnixStream, new_id: WlNewId) -> anyhow::Result<()> {
+    // Serialize get_registry request parameters into protocol format
+    let register_data: Vec<u8> = RequestParam::new(new_id).into();
 
-#[allow(unused)]
-impl WlDisplayGetRegisterParam {
-    /// Creates new registry parameters with the specified registry object ID.
-    ///
-    /// # Arguments
-    /// * `new_id` - The object ID for the new wl_registry object
-    pub(super) fn new(new_id: u32) -> Self {
-        Self { new_id }
+    // Construct the complete Wayland protocol message
+    let message = WlMessage::new(
+        WlObjectId::Display.into(),
+        Opcode::GetRegistry.into(),
+        &register_data,
+    );
+
+    // Send the message to the compositor over the Unix socket
+    let write_buf: Vec<u8> = message.into();
+    let written_len = stream.write(&write_buf)?;
+
+    // Verify the entire message was transmitted successfully
+    if write_buf.len() != written_len {
+        return Err(anyhow!(
+            "Failed to write complete wl_display_get_registry message: expected {} bytes, wrote {} bytes",
+            write_buf.len(),
+            written_len
+        ));
     }
 
-    /// Returns the object ID assigned to the registry object.
-    pub(super) fn new_id(&self) -> u32 {
-        self.new_id
-    }
-}
+    // Read compositor response containing events and potential errors
+    // Uses a fixed buffer size that should accommodate typical initial global bursts
+    let mut read_buf: [u8; 4096] = [0; 4096];
+    let read_len = stream.read(&mut read_buf)?;
 
-impl From<WlDisplayGetRegisterParam> for Vec<u8> {
-    /// Serializes the registry parameters into the Wayland wire format.
-    ///
-    /// # Returns
-    /// A 4-byte vector containing the new_id in native endianness.
-    ///
-    /// # Wire Format
-    /// The get_registry request carries a single argument:
-    /// - Bytes 0-3: `new_id` (u32) - The ID for the new registry object
-    fn from(args: WlDisplayGetRegisterParam) -> Vec<u8> {
-        args.new_id.to_ne_bytes().to_vec()
-    }
-}
-
-impl TryFrom<&[u8]> for WlDisplayGetRegisterParam {
-    type Error = anyhow::Error;
-
-    /// Deserializes registry parameters from the Wayland wire format.
-    ///
-    /// # Arguments
-    /// * `buf` - The byte buffer containing serialized parameter data
-    ///
-    /// # Returns
-    /// * `Ok(WlDisplayGetRegisterParam)` if the buffer contains valid parameter data
-    /// * `Err(anyhow::Error)` if the buffer is malformed or incomplete
-    ///
-    /// # Buffer Requirements
-    /// The buffer must contain exactly 4 bytes representing the new_id value.
-    fn try_from(buf: &[u8]) -> anyhow::Result<WlDisplayGetRegisterParam> {
-        if buf.len() != 4 {
-            return Err(anyhow!(
-                "Invalid buffer length for WlDisplayGetRegisterParam: expected 4 bytes, got {}",
-                buf.len()
-            ));
+    // Process all incoming events using a message iterator
+    // The iterator handles message boundaries and buffer management
+    let mut event_iter = WlMessageIter::new(read_buf[..read_len].into());
+    loop {
+        let event = event_iter.next();
+        if event.is_none() {
+            break;
         }
 
-        Ok(WlDisplayGetRegisterParam {
-            new_id: u32::from_ne_bytes(buf.try_into()?),
-        })
+        let event = event.unwrap();
+        let event_object: WlObjectId = event.header.object_id.try_into()?;
+
+        // Route events to appropriate handlers based on the target object type
+        match event_object {
+            WlObjectId::Display => {
+                // Handle display-level events (errors, sync callbacks, etc.)
+                handle_wl_display_event(event)?
+            }
+            WlObjectId::Registry => {
+                // Handle registry events (global advertisements, removals)
+                // This is the primary expected response to get_registry
+                handle_wl_registry_event(event)?
+            }
+            _ => {
+                // Unexpected object type - this may indicate a protocol violation
+                // or an extension interface we haven't implemented yet
+                unimplemented!(
+                    "Unexpected object type in get_registry response: {:?}",
+                    event_object as u32
+                )
+            }
+        }
     }
+
+    Ok(())
 }

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::protocol::types::{WL_TYPE_UINT_LEN, WlString, WlUint};
+use crate::protocol::types::{WL_TYPE_UINT_LEN, WlString, WlUInt};
 use anyhow::anyhow;
 
 /// Represents a global object advertisement from the Wayland registry.
@@ -28,7 +28,7 @@ pub struct Global {
     ///
     /// This name is used when binding to the global object via the `bind` request.
     /// Each global object has a unique name within the registry session.
-    pub name: WlUint,
+    pub name: WlUInt,
 
     /// The interface type implemented by this global object.
     ///
@@ -43,7 +43,7 @@ pub struct Global {
     /// versions may introduce new requests, events, or enum values while maintaining
     /// backward compatibility. Clients should check this version to determine which
     /// interface features are available.
-    pub version: WlUint,
+    pub version: WlUInt,
 }
 
 impl TryFrom<&[u8]> for Global {
@@ -84,7 +84,7 @@ impl TryFrom<&[u8]> for Global {
                 buf.len()
             ));
         }
-        let name = u32::from_ne_bytes(buf[..WL_TYPE_UINT_LEN].try_into()?);
+        let name = WlUInt::from_bytes(buf[..WL_TYPE_UINT_LEN].try_into()?);
 
         // Extract interface(WlString) from buffer - the interface type name
         let interface_start_pos = WL_TYPE_UINT_LEN;
@@ -100,7 +100,7 @@ impl TryFrom<&[u8]> for Global {
                 buf.len()
             ));
         }
-        let version = u32::from_ne_bytes(buf[version_start_pos..version_end_pos].try_into()?);
+        let version = WlUInt::from_bytes(buf[version_start_pos..version_end_pos].try_into()?);
 
         Ok(Global {
             name,

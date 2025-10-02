@@ -1,32 +1,23 @@
 pub mod wlarray;
 pub mod wlstring;
 
+use crate::wl_primitive_type;
+
 #[allow(unused)]
 pub use wlarray::WlArray;
 pub use wlstring::WlString;
 
+wl_primitive_type!(WlUInt(i32));
+wl_primitive_type!(WlInt(i32));
+wl_primitive_type!(WlObject(u32));
+wl_primitive_type!(WlNewId(u32));
+wl_primitive_type!(WlEnum(u32));
+
+pub const WL_TYPE_UINT_LEN: usize = WlUInt::type_size();
+pub const WL_TYPE_OBJECT_LEN: usize = WlObject::type_size();
 #[allow(dead_code)]
-pub type WlUint = u32;
-
-#[allow(dead_code)]
-pub type WlInt = i32;
-
-#[allow(dead_code)]
-pub type WlObject = u32;
-
-#[allow(dead_code)]
-pub type WlNewId = u32;
-
-#[allow(dead_code)]
-pub type WlEnum = u32;
-
-pub const WL_TYPE_UINT_LEN: usize = size_of::<WlUint>();
-pub const WL_TYPE_OBJECT_LEN: usize = size_of::<WlObject>();
-
-#[allow(dead_code)]
-pub const WL_TYPE_NEWID_LEN: usize = size_of::<WlNewId>();
-
-pub const WL_TYPE_ENUM_LEN: usize = size_of::<WlEnum>();
+pub const WL_TYPE_NEWID_LEN: usize = WlNewId::type_size();
+pub const WL_TYPE_ENUM_LEN: usize = WlEnum::type_size();
 
 /// Rounds a size up to the nearest multiple of 4 for 32-bit alignment.
 ///

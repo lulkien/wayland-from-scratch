@@ -1,7 +1,8 @@
 mod protocol;
 
-use crate::protocol::display::wl_display_get_registry;
 use std::os::unix::net::UnixStream;
+
+use crate::protocol::{display, types::WlNewId};
 
 fn connect_to_wayland_socket() -> anyhow::Result<UnixStream> {
     let xdg_runtime_dir = std::env::var("XDG_RUNTIME_DIR")?;
@@ -16,7 +17,7 @@ fn connect_to_wayland_socket() -> anyhow::Result<UnixStream> {
 
 fn main() -> anyhow::Result<()> {
     let mut stream = connect_to_wayland_socket()?;
-    wl_display_get_registry(&mut stream, 1)?;
+    display::request::get_registry(&mut stream, WlNewId(1))?;
 
     Ok(())
 }

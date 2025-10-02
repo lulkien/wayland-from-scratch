@@ -73,6 +73,28 @@ impl WlString {
         let string_len = (self.size - 1) as usize;
         std::str::from_utf8(&self.data[..string_len]).unwrap_or("")
     }
+
+    /// Returns the complete wire format bytes including length prefix, content, NUL terminator and padding.
+    ///
+    /// This returns all bytes that would be sent over the wire for this string.
+    ///
+    /// # Returns
+    /// A vector containing the complete wire format:
+    /// - 4-byte length prefix (string bytes + NUL)
+    /// - String content bytes (UTF-8 encoded)
+    /// - NUL terminator byte
+    /// - Padding bytes to reach 32-bit alignment
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = Vec::with_capacity(WL_STRING_PREFIX_LEN + self.data.len());
+
+        // Add 32-bit length prefix (string bytes + NUL, excluding padding)
+        buffer.extend_from_slice(&self.size.to_ne_bytes());
+
+        // Add string content bytes (including NUL terminator and padding)
+        buffer.extend_from_slice(&self.data);
+
+        buffer
+    }
 }
 
 impl std::fmt::Display for WlString {
@@ -117,15 +139,7 @@ impl From<WlString> for Vec<u8> {
     /// # Returns
     /// A byte vector in the Wayland string wire format.
     fn from(wls: WlString) -> Vec<u8> {
-        let mut buffer = Vec::with_capacity(WL_STRING_PREFIX_LEN + wls.data.len());
-
-        // Add 32-bit length prefix (string bytes + NUL, excluding padding)
-        buffer.extend_from_slice(&wls.size.to_ne_bytes());
-
-        // Add string content bytes (including NUL terminator and padding)
-        buffer.extend_from_slice(&wls.data);
-
-        buffer
+        wls.to_bytes()
     }
 }
 

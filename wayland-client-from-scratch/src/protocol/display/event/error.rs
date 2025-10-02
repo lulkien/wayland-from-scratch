@@ -97,7 +97,7 @@ impl TryFrom<&[u8]> for Error {
                 buf.len()
             ));
         }
-        let object_id = WlObject::from_ne_bytes(buf[..WL_TYPE_OBJECT_LEN].try_into()?);
+        let object_id = WlObject::from_bytes(buf[..WL_TYPE_OBJECT_LEN].try_into()?);
 
         // Extract code(WlEnum) from buffer
         let code_start_pos = WL_TYPE_OBJECT_LEN;
@@ -111,7 +111,7 @@ impl TryFrom<&[u8]> for Error {
             ));
         }
 
-        let code_raw = WlEnum::from_ne_bytes(buf[code_start_pos..code_end_pos].try_into()?);
+        let code_raw = WlEnum::from_bytes(buf[code_start_pos..code_end_pos].try_into()?).get();
         let error_code: ErrorId = code_raw.try_into()?;
 
         // Parse error message string - human-readable description
