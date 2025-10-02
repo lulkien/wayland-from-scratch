@@ -11,7 +11,7 @@ use crate::protocol::message::WlMessage;
 /// internal Wayland protocol features. It serves as the entry point for clients to
 /// connect to the compositor and manage protocol-level operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WlDisplayEvent {
+pub enum Event {
     /// Indicates a fatal (non-recoverable) error has occurred in the protocol.
     ///
     /// This event is sent when a serious error occurs, typically in response to a
@@ -36,7 +36,7 @@ pub enum WlDisplayEvent {
     DeleteId = 1,
 }
 
-impl TryFrom<u16> for WlDisplayEvent {
+impl TryFrom<u16> for Event {
     type Error = anyhow::Error;
 
     /// Attempts to convert a raw opcode value into a structured `WlDisplayEvent`.
@@ -51,10 +51,10 @@ impl TryFrom<u16> for WlDisplayEvent {
     /// # Protocol Context
     /// The display object uses opcode 0 for error notifications and opcode 1 for
     /// delete ID acknowledgments as defined in the Wayland core protocol specification.
-    fn try_from(value: u16) -> anyhow::Result<WlDisplayEvent> {
+    fn try_from(value: u16) -> anyhow::Result<Event> {
         match value {
-            0 => Ok(WlDisplayEvent::Error),
-            1 => Ok(WlDisplayEvent::DeleteId),
+            0 => Ok(Event::Error),
+            1 => Ok(Event::DeleteId),
             _ => Err(anyhow!("Invalid wl_display event opcode: {}", value)),
         }
     }
@@ -86,11 +86,11 @@ impl TryFrom<u16> for WlDisplayEvent {
 ///   Events on this object typically indicate critical connection state changes.
 pub fn handle_wl_display_event(msg: WlMessage) -> anyhow::Result<()> {
     // Decode the event type from the message opcode
-    let event_code: WlDisplayEvent = msg.header.opcode.try_into()?;
+    let event_code: Event = msg.header.opcode.try_into()?;
 
     // Route the event to the appropriate handler based on type
     match event_code {
-        WlDisplayEvent::Error => error::handle_wl_display_error(&msg.data),
-        WlDisplayEvent::DeleteId => delete_id::handle_wl_display_delete_id(&msg.data),
+        Event::Error => error::handle_wl_display_error(&msg.data),
+        Event::DeleteId => delete_id::handle_wl_display_delete_id(&msg.data),
     }
 }

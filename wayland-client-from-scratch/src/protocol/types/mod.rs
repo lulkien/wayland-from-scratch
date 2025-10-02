@@ -6,19 +6,27 @@ pub use wlarray::WlArray;
 pub use wlstring::WlString;
 
 #[allow(dead_code)]
-type WlUint = u32;
+pub type WlUint = u32;
 
 #[allow(dead_code)]
-type WlInt = i32;
+pub type WlInt = i32;
 
 #[allow(dead_code)]
-type WlObject = u32;
+pub type WlObject = u32;
 
 #[allow(dead_code)]
-type WlNewId = u32;
+pub type WlNewId = u32;
 
 #[allow(dead_code)]
-type WlEnum = u32;
+pub type WlEnum = u32;
+
+pub const WL_TYPE_UINT_LEN: usize = size_of::<WlUint>();
+pub const WL_TYPE_OBJECT_LEN: usize = size_of::<WlObject>();
+
+#[allow(dead_code)]
+pub const WL_TYPE_NEWID_LEN: usize = size_of::<WlNewId>();
+
+pub const WL_TYPE_ENUM_LEN: usize = size_of::<WlEnum>();
 
 /// Rounds a size up to the nearest multiple of 4 for 32-bit alignment.
 ///

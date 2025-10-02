@@ -16,7 +16,7 @@ fn connect_to_wayland_socket() -> anyhow::Result<UnixStream> {
 
 fn main() -> anyhow::Result<()> {
     let mut stream = connect_to_wayland_socket()?;
-    wl_display_get_registry(&mut stream, 2)?;
+    wl_display_get_registry(&mut stream, 1)?;
 
     Ok(())
 }

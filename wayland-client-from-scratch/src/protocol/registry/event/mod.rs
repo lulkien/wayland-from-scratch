@@ -13,7 +13,7 @@ pub mod global_remove;
 /// functionality. The registry emits events to notify clients of available globals
 /// and their removal due to device hotplugs, reconfiguration, or other system events.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WlRegistryEvent {
+pub enum Event {
     /// Announces the availability of a new global object.
     ///
     /// This event notifies the client that a global object with the given name is
@@ -39,17 +39,17 @@ pub enum WlRegistryEvent {
     GlobalRemove = 1,
 }
 
-impl From<WlRegistryEvent> for u16 {
+impl From<Event> for u16 {
     /// Converts a `WlRegistryEvent` variant to its corresponding protocol opcode.
     ///
     /// # Returns
     /// The numeric opcode value used in Wayland protocol messages for this event type.
-    fn from(value: WlRegistryEvent) -> u16 {
+    fn from(value: Event) -> u16 {
         value as u16
     }
 }
 
-impl TryFrom<u16> for WlRegistryEvent {
+impl TryFrom<u16> for Event {
     type Error = anyhow::Error;
 
     /// Attempts to convert a raw opcode value into a structured `WlRegistryEvent`.
@@ -66,8 +66,8 @@ impl TryFrom<u16> for WlRegistryEvent {
     /// removal notifications as defined in the Wayland protocol specification.
     fn try_from(value: u16) -> anyhow::Result<Self> {
         match value {
-            0 => Ok(WlRegistryEvent::Global),
-            1 => Ok(WlRegistryEvent::GlobalRemove),
+            0 => Ok(Event::Global),
+            1 => Ok(Event::GlobalRemove),
             _ => Err(anyhow!("Invalid wl_registry event opcode: {}", value)),
         }
     }
@@ -97,11 +97,11 @@ impl TryFrom<u16> for WlRegistryEvent {
 /// Subsequent global additions and removals are communicated via additional events.
 pub fn handle_wl_registry_event(msg: WlMessage) -> anyhow::Result<()> {
     // Decode the event type from the message opcode
-    let event_code: WlRegistryEvent = msg.header.opcode.try_into()?;
+    let event_code: Event = msg.header.opcode.try_into()?;
 
     // Route the event to the appropriate handler based on type
     match event_code {
-        WlRegistryEvent::Global => global::handle_wl_registry_global(&msg.data),
-        WlRegistryEvent::GlobalRemove => global_remove::handle_wl_registry_global_remove(&msg.data),
+        Event::Global => global::handle_wl_registry_global(&msg.data),
+        Event::GlobalRemove => global_remove::handle_wl_registry_global_remove(&msg.data),
     }
 }

@@ -1,10 +1,7 @@
 use std::fmt::Display;
 
-use crate::protocol::types::WlString;
+use crate::protocol::types::{WL_TYPE_UINT_LEN, WlString, WlUint};
 use anyhow::anyhow;
-
-const WL_REGISTRY_GLOBAL_NAME_LEN: usize = size_of::<u32>();
-const WL_REGISTRY_GLOBAL_VERSION_LEN: usize = size_of::<u32>();
 
 /// Represents a global object advertisement from the Wayland registry.
 ///
@@ -26,12 +23,12 @@ const WL_REGISTRY_GLOBAL_VERSION_LEN: usize = size_of::<u32>();
 ///   <arg name="version" type="uint" summary="interface version"/>
 /// </event>
 /// ```
-pub struct WlRegistryGlobal {
+pub struct Global {
     /// The unique numeric identifier for this global object.
     ///
     /// This name is used when binding to the global object via the `bind` request.
     /// Each global object has a unique name within the registry session.
-    pub name: u32,
+    pub name: WlUint,
 
     /// The interface type implemented by this global object.
     ///
@@ -46,10 +43,10 @@ pub struct WlRegistryGlobal {
     /// versions may introduce new requests, events, or enum values while maintaining
     /// backward compatibility. Clients should check this version to determine which
     /// interface features are available.
-    pub version: u32,
+    pub version: WlUint,
 }
 
-impl TryFrom<&[u8]> for WlRegistryGlobal {
+impl TryFrom<&[u8]> for Global {
     type Error = anyhow::Error;
 
     /// Deserializes a `wl_registry.global` event from the Wayland wire format.
@@ -78,36 +75,34 @@ impl TryFrom<&[u8]> for WlRegistryGlobal {
     /// - Buffer is too short for the interface string parsing
     /// - Buffer is too short for the version field after parsing the interface
     /// - The interface string contains invalid data or missing NUL terminator
-    fn try_from(buf: &[u8]) -> anyhow::Result<WlRegistryGlobal> {
+    fn try_from(buf: &[u8]) -> anyhow::Result<Global> {
         // Extract name(u32) from buffer - the unique numeric identifier
-        if buf.len() < WL_REGISTRY_GLOBAL_NAME_LEN {
+        if buf.len() < WL_TYPE_UINT_LEN {
             return Err(anyhow!(
                 "Buffer too short for WlRegistryGlobal name: expected {} bytes, got {}",
-                WL_REGISTRY_GLOBAL_NAME_LEN,
+                WL_TYPE_UINT_LEN,
                 buf.len()
             ));
         }
-        let name = u32::from_ne_bytes(buf[..size_of::<u32>()].try_into()?);
+        let name = u32::from_ne_bytes(buf[..WL_TYPE_UINT_LEN].try_into()?);
 
         // Extract interface(WlString) from buffer - the interface type name
-        let interface_start_pos = WL_REGISTRY_GLOBAL_NAME_LEN;
+        let interface_start_pos = WL_TYPE_UINT_LEN;
         let interface: WlString = buf[interface_start_pos..].try_into()?;
 
         // Extract version(u32) from buffer - the interface version number
         let version_start_pos = interface_start_pos + interface.buffer_size();
-        if buf.len() < version_start_pos + WL_REGISTRY_GLOBAL_VERSION_LEN {
+        let version_end_pos = version_start_pos + WL_TYPE_UINT_LEN;
+        if buf.len() < version_end_pos {
             return Err(anyhow!(
                 "Buffer too short for WlRegistryGlobal version: expected {} bytes, got {}",
-                version_start_pos + WL_REGISTRY_GLOBAL_VERSION_LEN,
+                version_end_pos,
                 buf.len()
             ));
         }
-        let version = u32::from_ne_bytes(
-            buf[version_start_pos..version_start_pos + WL_REGISTRY_GLOBAL_VERSION_LEN]
-                .try_into()?,
-        );
+        let version = u32::from_ne_bytes(buf[version_start_pos..version_end_pos].try_into()?);
 
-        Ok(WlRegistryGlobal {
+        Ok(Global {
             name,
             interface,
             version,
@@ -115,21 +110,12 @@ impl TryFrom<&[u8]> for WlRegistryGlobal {
     }
 }
 
-impl Display for WlRegistryGlobal {
+impl Display for Global {
     /// Formats the global object information for human-readable display.
     ///
     /// Provides a structured view of the global object advertisement including
     /// its numeric name, interface type, and version number. This is particularly
     /// useful for debugging and logging during protocol discovery.
-    ///
-    /// # Output Format
-    /// `WlRegistryGlobal { name: <name>, interface: <interface>, version: <version> }`
-    ///
-    /// # Examples
-    /// ```
-    /// // Might display:
-    /// // WlRegistryGlobal { name: 1, interface: WlString { len: 12, string: "wl_compositor" }, version: 4 }
-    /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -167,7 +153,7 @@ impl Display for WlRegistryGlobal {
 /// - Check interface versions to use appropriate feature sets
 /// - Track available resources for dynamic environments
 pub(super) fn handle_wl_registry_global(buf: &[u8]) -> anyhow::Result<()> {
-    let global: WlRegistryGlobal = buf.try_into()?;
+    let global: Global = buf.try_into()?;
 
     println!("{global}");
 
