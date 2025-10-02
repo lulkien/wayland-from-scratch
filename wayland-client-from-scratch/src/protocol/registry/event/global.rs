@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::protocol::types::wlstring::WlString;
+use crate::protocol::types::WlString;
 use anyhow::anyhow;
 
 const WL_REGISTRY_GLOBAL_NAME_LEN: usize = size_of::<u32>();

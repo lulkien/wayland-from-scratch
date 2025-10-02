@@ -3,7 +3,7 @@ use std::mem::size_of;
 
 use anyhow::anyhow;
 
-use crate::protocol::types::wlstring::WlString;
+use crate::protocol::types::WlString;
 
 const WL_DISPLAY_ERROR_OBJECT_LEN: usize = size_of::<u32>();
 const WL_DISPLAY_ERROR_CODE_LEN: usize = size_of::<u32>();
