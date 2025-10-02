@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 
 pub mod display;
+pub mod macros;
 pub mod message;
 pub mod registry;
 pub mod types;

@@ -94,7 +94,7 @@ impl TryFrom<&[u8]> for WlRegistryGlobal {
         let interface: WlString = buf[interface_start_pos..].try_into()?;
 
         // Extract version(u32) from buffer - the interface version number
-        let version_start_pos = interface_start_pos + interface.buffer_len();
+        let version_start_pos = interface_start_pos + interface.buffer_size();
         if buf.len() < version_start_pos + WL_REGISTRY_GLOBAL_VERSION_LEN {
             return Err(anyhow!(
                 "Buffer too short for WlRegistryGlobal version: expected {} bytes, got {}",
